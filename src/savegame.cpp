@@ -38,7 +38,6 @@
 #include "popup.h"
 #include "regional_settings.h"
 #include "scent_map.h"
-#include "sdltiles.h"
 #include "stats_tracker.h"
 #include "string_id.h"
 #include "translations.h"
@@ -52,24 +51,6 @@ extern std::map<std::string, std::list<input_event>> quick_shortcuts_map;
 #endif
 
 static const oter_str_id oter_omt_obsolete( "omt_obsolete" );
-
-namespace {
-#if defined(TILES)
-constexpr auto maximum_zoom_level = 4;
-constexpr auto minimum_zoom_level = 64;
-
-auto clamp_tileset_zoom( float zoom_level ) -> float
-{
-    return std::clamp( zoom_level, static_cast<float>( maximum_zoom_level ),
-                       static_cast<float>( minimum_zoom_level ) );
-}
-
-auto clamp_overmap_tileset_zoom( int zoom_level ) -> int
-{
-    return std::clamp( zoom_level, maximum_zoom_level, minimum_zoom_level );
-}
-#endif
-} // namespace
 
 /*
  * Changes that break backwards compatibility should bump this number, so the game can
@@ -1200,16 +1181,6 @@ void game::unserialize_master( std::istream &fin )
             } else if( name == "weather" ) {
                 JsonObject w = jsin.get_object();
                 w.read( "lightning", get_weather().lightning_active );
-#if defined(TILES)
-            } else if( name == "tileset_zoom" ) {
-                tileset_zoom = clamp_tileset_zoom( jsin.get_float() );
-                set_zoom( tileset_zoom );
-            } else if( name == "overmap_tileset_zoom" ) {
-                overmap_tileset_zoom = clamp_overmap_tileset_zoom( jsin.get_int() );
-                if( overmap_tilecontext ) {
-                    overmap_tilecontext->set_draw_scale( overmap_tileset_zoom );
-                }
-#endif
             } else {
                 // silently ignore anything else
                 jsin.skip_value();
@@ -1252,10 +1223,6 @@ void game::serialize_master( std::ostream &fout )
         json.start_object();
         json.member( "lightning", get_weather().lightning_active );
         json.end_object();
-#if defined(TILES)
-        json.member( "tileset_zoom", tileset_zoom );
-        json.member( "overmap_tileset_zoom", overmap_tileset_zoom );
-#endif
 
         json.end_object();
     } catch( const JsonError &e ) {
