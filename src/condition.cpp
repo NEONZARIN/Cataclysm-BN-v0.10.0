@@ -97,7 +97,7 @@ void conditional_t<T>::set_has_any_trait( const JsonObject &jo, const std::strin
         traits_to_check.emplace_back( f );
     }
     condition = [traits_to_check, is_npc]( const T & d ) {
-        player *actor = d.alpha;
+        auto *actor = d.alpha;
         if( is_npc ) {
             actor = dynamic_cast<player *>( d.beta );
         }
@@ -115,7 +115,7 @@ void conditional_t<T>::set_has_trait( const JsonObject &jo, const std::string &m
 {
     const std::string &trait_to_check = jo.get_string( member );
     condition = [trait_to_check, is_npc]( const T & d ) {
-        player *actor = d.alpha;
+        auto *actor = d.alpha;
         if( is_npc ) {
             actor = dynamic_cast<player *>( d.beta );
         }
@@ -134,7 +134,7 @@ void conditional_t<T>::set_has_trait_flag( const JsonObject &jo, const std::stri
     }
     const bool check_threshold = trait_flag_to_check == flag_MUTATION_THRESHOLD;
     condition = [trait_flag_to_check, check_threshold, is_npc]( const T & d ) {
-        player *actor = d.alpha;
+        auto *actor = d.alpha;
         if( is_npc ) {
             actor = dynamic_cast<player *>( d.beta );
         }
@@ -149,7 +149,7 @@ template<class T>
 void conditional_t<T>::set_has_activity( bool is_npc )
 {
     condition = [is_npc]( const T & d ) {
-        player *actor = d.alpha;
+        auto *actor = d.alpha;
         if( is_npc ) {
             return d.beta->has_activity();
         } else {
@@ -750,7 +750,7 @@ template<class T>
 void conditional_t<T>::set_can_stow_weapon( bool is_npc )
 {
     condition = [is_npc]( const T & d ) {
-        player *actor = d.alpha;
+        auto *actor = d.alpha;
         if( is_npc ) {
             actor = dynamic_cast<player *>( d.beta );
         }
@@ -782,6 +782,24 @@ void conditional_t<T>::set_is_driving( bool is_npc )
             return vp->vehicle().is_moving() && vp->vehicle().player_in_control( *actor );
         }
         return false;
+    };
+}
+
+template<class T>
+auto conditional_t<T>::set_vehicle_controls( bool is_npc ) -> void
+{
+    condition = [is_npc]( const T & d ) {
+        auto *actor = d.alpha;
+        if( is_npc ) {
+            actor = dynamic_cast<player *>( d.beta );
+        }
+        const auto vp = get_map().veh_at( actor->pos() );
+        if( !vp ) {
+            return false;
+        }
+        auto &veh = vp->vehicle();
+        const auto has_controls = veh.part_with_feature( vp->part_index(), VPFLAG_CONTROLS, false ) >= 0;
+        return actor->in_vehicle && has_controls;
     };
 }
 
@@ -1133,6 +1151,8 @@ conditional_t<T>::conditional_t( const std::string &type )
         set_is_driving();
     } else if( type == "npc_driving" ) {
         set_is_driving( is_npc );
+    } else if( type == "npc_vehicle_controls" ) {
+        set_vehicle_controls( is_npc );
     } else if( type == "npc_has_activity" ) {
         set_has_activity( is_npc );
     } else if( type == "npc_is_riding" ) {
