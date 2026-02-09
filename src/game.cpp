@@ -297,24 +297,6 @@ std::unique_ptr<game> g;
 //The one and only uistate instance
 uistatedata uistate;
 
-namespace {
-#if defined(TILES)
-constexpr auto maximum_zoom_level = 4;
-constexpr auto minimum_zoom_level = 64;
-
-auto clamp_tileset_zoom( float zoom_level ) -> float
-{
-    return std::clamp( zoom_level, static_cast<float>( maximum_zoom_level ),
-                       static_cast<float>( minimum_zoom_level ) );
-}
-
-auto clamp_overmap_tileset_zoom( int zoom_level ) -> int
-{
-    return std::clamp( zoom_level, maximum_zoom_level, minimum_zoom_level );
-}
-#endif
-} // namespace
-
 bool is_valid_in_w_terrain( point p )
 {
     return p.x >= 0 && p.x < TERRAIN_WINDOW_WIDTH && p.y >= 0 && p.y < TERRAIN_WINDOW_HEIGHT;
@@ -386,15 +368,6 @@ void game::load_static_data()
     get_auto_pickup().load_global();
     get_safemode().load_global();
     get_distraction_manager().load();
-
-#if defined(TILES)
-    tileset_zoom = clamp_tileset_zoom( get_option<float>( "TILESET_ZOOM" ) );
-    rescale_tileset( tileset_zoom );
-    overmap_tileset_zoom = clamp_overmap_tileset_zoom( get_option<int>( "OVERMAP_TILESET_ZOOM" ) );
-    if( overmap_tilecontext ) {
-        overmap_tilecontext->set_draw_scale( overmap_tileset_zoom );
-    }
-#endif // TILES
 }
 
 #if !(defined(_WIN32) || defined(TILES))
@@ -505,9 +478,6 @@ void game::reload_tileset( [[maybe_unused]] const std::function<void( std::strin
         } catch( const std::exception &err ) {
             popup( _( "Loading the overmap tileset failed: %s" ), err.what() );
         }
-    }
-    if( overmap_tilecontext && overmap_tilecontext != tilecontext ) {
-        overmap_tilecontext->set_draw_scale( overmap_tileset_zoom );
     }
     // Reload resets the tile context scale to its default; reapply the previous zoom explicitly
     // even when the numeric zoom value did not change.
@@ -7561,7 +7531,10 @@ static void centerlistview( const tripoint &active_item_position, int ui_width )
 }
 
 #if defined(TILES)
-static auto calc_next_zoom( float cur_zoom, int direction ) -> float
+static constexpr int MAXIMUM_ZOOM_LEVEL = 4;
+static constexpr int MINIMUM_ZOOM_LEVEL = 64;
+
+static float calc_next_zoom( float cur_zoom, int direction )
 {
     const int step_count = get_option<int>( "ZOOM_STEP_COUNT" );
     const double nth_root_2 = std::pow( 2, 1. / step_count );
@@ -7576,10 +7549,10 @@ static auto calc_next_zoom( float cur_zoom, int direction ) -> float
 
     // calculate next zoom value, and wrap if needed
     double next_zoom = std::pow( nth_root_2, zoom_level );
-    if( next_zoom < maximum_zoom_level - 0.0001f ) {
-        next_zoom = minimum_zoom_level;
-    } else if( next_zoom > minimum_zoom_level + 0.0001f ) {
-        next_zoom = maximum_zoom_level;
+    if( next_zoom < MAXIMUM_ZOOM_LEVEL - 0.0001f ) {
+        next_zoom = MINIMUM_ZOOM_LEVEL;
+    } else if( next_zoom > MINIMUM_ZOOM_LEVEL + 0.0001f ) {
+        next_zoom = MAXIMUM_ZOOM_LEVEL;
     }
 
     return next_zoom;
@@ -7591,20 +7564,18 @@ void game::zoom_out()
 #if defined(TILES)
     tileset_zoom = calc_next_zoom( tileset_zoom, -1 );
     rescale_tileset( tileset_zoom );
-    get_options().get_option( "TILESET_ZOOM" ).setValue( tileset_zoom );
 #endif
 }
 
 void game::zoom_out_overmap()
 {
 #if defined(TILES)
-    if( overmap_tileset_zoom > maximum_zoom_level ) {
+    if( overmap_tileset_zoom > MAXIMUM_ZOOM_LEVEL ) {
         overmap_tileset_zoom /= 2;
     } else {
-        overmap_tileset_zoom = minimum_zoom_level;
+        overmap_tileset_zoom = 64;
     }
     overmap_tilecontext->set_draw_scale( overmap_tileset_zoom );
-    get_options().get_option( "OVERMAP_TILESET_ZOOM" ).setValue( overmap_tileset_zoom );
 #endif
 }
 
@@ -7613,27 +7584,25 @@ void game::zoom_in()
 #if defined(TILES)
     tileset_zoom = calc_next_zoom( tileset_zoom, 1 );
     rescale_tileset( tileset_zoom );
-    get_options().get_option( "TILESET_ZOOM" ).setValue( tileset_zoom );
 #endif
 }
 
 void game::zoom_in_overmap()
 {
 #if defined(TILES)
-    if( overmap_tileset_zoom == minimum_zoom_level ) {
-        overmap_tileset_zoom = maximum_zoom_level;
+    if( overmap_tileset_zoom == 64 ) {
+        overmap_tileset_zoom = MAXIMUM_ZOOM_LEVEL;
     } else {
         overmap_tileset_zoom *= 2;
     }
     overmap_tilecontext->set_draw_scale( overmap_tileset_zoom );
-    get_options().get_option( "OVERMAP_TILESET_ZOOM" ).setValue( overmap_tileset_zoom );
 #endif
 }
 
 void game::reset_zoom()
 {
 #if defined(TILES)
-    tileset_zoom = clamp_tileset_zoom( get_option<float>( "TILESET_ZOOM" ) );
+    tileset_zoom = DEFAULT_TILESET_ZOOM;
     rescale_tileset( tileset_zoom );
 #endif // TILES
 }
