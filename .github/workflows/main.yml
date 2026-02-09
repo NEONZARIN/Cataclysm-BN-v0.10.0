@@ -1,0 +1,62 @@
+name: Build Cataclysm-BN Windows
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup MSYS2
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: mingw64
+        install: gettext
+
+    - name: Compile translations
+      shell: msys2 {0}
+      run: lang/compile_mo.sh all
+
+    - name: Install MSBuild
+      uses: microsoft/setup-msbuild@v2
+      with:
+        vs-version: 17.13
+
+    - name: Install CMake
+      uses: lukka/get-cmake@v3.31.6
+
+    - name: Install vcpkg
+      uses: lukka/run-vcpkg@main
+      id: runvcpkg
+      with:
+        vcpkgDirectory: "${{ github.workspace }}/../b/vcpkg"
+
+    - name: Integrate vcpkg
+      run: vcpkg integrate install
+
+    - name: Configure and Build
+      uses: lukka/run-cmake@v10
+      env:
+        VCPKG_OVERLAY_TRIPLETS: ${{ github.workspace }}\.github\vcpkg_triplets
+      with:
+        configurePreset: windows-tiles-sounds-x64-msvc
+        buildPreset: windows-msvc-build
+        configurePresetAdditionalArgs: "['-DRELEASE=ON']"
+        buildPresetAdditionalArgs: "['--config', 'Release']"
+
+    - name: Create distribution package
+      run: |
+        cmake --install out/build/windows-tiles-sounds-x64-msvc --prefix cataclysmbn-experimental --config Release
+        Compress-Archive -Force -Path cataclysmbn-experimental/* -DestinationPath cataclysm-bn-windows.zip
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: cataclysm-bn-windows
+        path: cataclysm-bn-windows.zip 
