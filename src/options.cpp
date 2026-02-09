@@ -2148,31 +2148,6 @@ void options_manager::add_options_graphics()
          translate_marker( "Number of steps between zoom levels." ),
          1, 7, 1, COPT_CURSES_HIDE );
 
-    add( "ZOOM_PERSISTENCE_SCOPE", graphics, translate_marker( "Zoom persistence scope" ),
-         translate_marker( "Determines where tileset zoom defaults are saved.  "
-                           "Global uses global options, World uses world options, "
-                           "Save uses per-world UI state, and Session does not persist." ),
-    {
-        { "global", translate_marker( "Global" ) },
-        { "world", translate_marker( "World" ) },
-        { "uistate", translate_marker( "Save" ) },
-        { "session", translate_marker( "Session" ) }
-    }, "global", COPT_CURSES_HIDE );
-
-    add( "TILESET_ZOOM", graphics, translate_marker( "Default tileset zoom" ),
-         translate_marker( "Sets the default zoom level for the main tileset.  "
-                           "This value updates when you zoom in or out and is restored after loading a save." ),
-         4.0f, 64.0f, static_cast<float>( DEFAULT_TILESET_ZOOM ), 1.0f, COPT_CURSES_HIDE, "%.2f" );
-
-    get_option( "TILESET_ZOOM" ).setPrerequisite( "USE_TILES" );
-
-    add( "OVERMAP_TILESET_ZOOM", graphics, translate_marker( "Default overmap tileset zoom" ),
-         translate_marker( "Sets the default zoom level for the overmap tileset.  "
-                           "This value updates when you zoom in or out on the overmap and is restored after loading a save." ),
-         4, 64, DEFAULT_TILESET_ZOOM, COPT_CURSES_HIDE );
-
-    get_option( "OVERMAP_TILESET_ZOOM" ).setPrerequisite( "USE_TILES_OVERMAP" );
-
     add_empty_line();
 
 #if defined(TILES)
@@ -2464,14 +2439,6 @@ void options_manager::add_options_world_default()
         { "query", translate_marker( "Query" ) }, { "keep", translate_marker( "Keep" ) }
     }, "reset"
        );
-
-    add( "WORLD_TILESET_ZOOM", world_default, translate_marker( "Default tileset zoom" ),
-         translate_marker( "Sets the default zoom level for the main tileset in this world." ),
-         4.0f, 64.0f, static_cast<float>( DEFAULT_TILESET_ZOOM ), 1.0f );
-
-    add( "WORLD_OVERMAP_TILESET_ZOOM", world_default, translate_marker( "Default overmap tileset zoom" ),
-         translate_marker( "Sets the default zoom level for the overmap tileset in this world." ),
-         4, 64, DEFAULT_TILESET_ZOOM );
 
     add_empty_line();
 

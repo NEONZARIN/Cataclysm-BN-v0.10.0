@@ -114,8 +114,6 @@ class uistatedata
         // draw monster groups on the overmap.
         bool overmap_debug_mongroup = false;
         std::set<tripoint_abs_omt> overmap_highlighted_omts;
-        auto tileset_zoom = std::optional<float>{};
-        auto overmap_tileset_zoom = std::optional<int>{};
 
         // V Menu Stuff
         int list_item_sort = 0;
