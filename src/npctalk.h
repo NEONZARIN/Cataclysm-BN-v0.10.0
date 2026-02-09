@@ -86,16 +86,10 @@ void set_npc_pickup( npc &p );
 void npc_die( npc &p );
 void npc_thankful( npc &p );
 void clear_overrides( npc &p );
-auto npc_vehicle_drive_to( npc &p ) -> void;
-auto npc_vehicle_set_speed( npc &p ) -> void;
-auto npc_vehicle_stop( npc &p ) -> void;
-auto npc_vehicle_shutdown( npc &p ) -> void;
-auto npc_vehicle_speed_up( npc &p ) -> void;
-auto npc_vehicle_speed_down( npc &p ) -> void;
-auto npc_vehicle_leave_controls( npc &p ) -> void;
 } // namespace talk_function
 
 time_duration calc_skill_training_time( const npc &p, const skill_id &skill );
 int calc_skill_training_cost( const npc &p, const skill_id &skill );
 time_duration calc_ma_style_training_time( const npc &, const matype_id & /* id */ );
 int calc_ma_style_training_cost( const npc &p, const matype_id & /* id */ );
+

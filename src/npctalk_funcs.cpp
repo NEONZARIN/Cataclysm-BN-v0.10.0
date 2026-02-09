@@ -1,17 +1,13 @@
 #include "npctalk.h" // IWYU pragma: associated
 
 #include <algorithm>
-#include <charconv>
-#include <cmath>
 #include <cstddef>
 #include <memory>
 #include <optional>
 #include <set>
 #include <string>
-#include <system_error>
 #include <vector>
 
-#include "activity_actor_definitions.h"
 #include "auto_pickup.h"
 #include "avatar.h"
 #include "bionics.h"
@@ -50,13 +46,8 @@
 #include "point.h"
 #include "rng.h"
 #include "string_id.h"
-#include "units_utility.h"
 #include "translations.h"
 #include "ui.h"
-#include "overmap_ui.h"
-#include "vpart_position.h"
-#include "vehicle.h"
-#include "vehicle_part.h"
 
 static const activity_id ACT_FIND_MOUNT( "ACT_FIND_MOUNT" );
 static const activity_id ACT_MOVE_LOOT( "ACT_MOVE_LOOT" );
@@ -93,124 +84,6 @@ static const flag_id flag_BIONIC_WEAPON( "BIONIC_WEAPON" );
 static const mtype_id mon_chicken( "mon_chicken" );
 static const mtype_id mon_cow( "mon_cow" );
 static const mtype_id mon_horse( "mon_horse" );
-
-namespace
-{
-constexpr const char *npc_autodrive_speed_key = "npc_autodrive_speed_limit";
-
-auto get_npc_vehicle_at_controls( npc &p ) -> vehicle *
-{
-    if( !p.in_vehicle ) {
-        return nullptr;
-    }
-    const auto vp = get_map().veh_at( p.pos() );
-    if( !vp ) {
-        return nullptr;
-    }
-    auto &veh = vp->vehicle();
-    const auto has_controls = veh.part_with_feature( vp->part_index(), VPFLAG_CONTROLS, false ) >= 0;
-    if( !has_controls ) {
-        return nullptr;
-    }
-    return &veh;
-}
-
-auto parse_npc_speed_limit( const npc &p ) -> std::optional<int>
-{
-    const auto value = p.get_value( npc_autodrive_speed_key );
-    if( value.empty() ) {
-        return std::nullopt;
-    }
-    auto limit = 0;
-    const auto result = std::from_chars( value.data(), value.data() + value.size(), limit );
-    if( result.ec != std::errc() ) {
-        return std::nullopt;
-    }
-    return limit;
-}
-
-auto set_npc_speed_limit( npc &p, const std::optional<int> &limit ) -> void
-{
-    if( limit ) {
-        p.set_value( npc_autodrive_speed_key, std::to_string( *limit ) );
-        return;
-    }
-    p.remove_value( npc_autodrive_speed_key );
-}
-
-auto display_speed_from_internal( const int internal_speed, const units_type vel_units ) -> int
-{
-    return static_cast<int>( std::round( convert_velocity( internal_speed, vel_units ) ) );
-}
-
-auto internal_speed_from_display( const int display_speed, const units_type vel_units ) -> int
-{
-    auto speed = static_cast<double>( display_speed );
-    const auto type = get_option<std::string>( "USE_METRIC_SPEEDS" );
-    if( type == "km/h" ) {
-        speed /= vel_units == VU_VEHICLE ? 1.609 : 0.447;
-    } else if( type == "t/t" ) {
-        speed *= 4;
-    }
-    return static_cast<int>( std::round( speed * 100.0 ) );
-}
-
-auto apply_npc_speed_limit( npc &p, vehicle &veh, const int display_speed ) -> void
-{
-    if( display_speed <= 0 ) {
-        set_npc_speed_limit( p, std::nullopt );
-        add_msg( _( "%s will use the default autodrive speed." ), p.disp_name() );
-        return;
-    }
-    const auto max_speed = veh.safe_velocity();
-    const auto internal_speed = internal_speed_from_display( display_speed, VU_VEHICLE );
-    const auto clamped_speed = std::clamp( internal_speed, 0, max_speed );
-    set_npc_speed_limit( p, clamped_speed );
-    veh.cruise_on = true;
-    veh.cruise_velocity = clamped_speed;
-    add_msg( _( "%s will try to drive at %d %s." ), p.disp_name(),
-             display_speed_from_internal( clamped_speed, VU_VEHICLE ),
-             velocity_units( VU_VEHICLE ) );
-}
-
-auto adjust_npc_speed_limit( npc &p, vehicle &veh, const int delta_display ) -> void
-{
-    const auto current_limit = parse_npc_speed_limit( p ).value_or( veh.cruise_velocity );
-    const auto current_display = display_speed_from_internal( current_limit, VU_VEHICLE );
-    apply_npc_speed_limit( p, veh, current_display + delta_display );
-}
-
-auto get_vehicle_overmap_path( const vehicle &veh,
-                               const tripoint_abs_omt &dest ) -> std::vector<tripoint_abs_omt>
-{
-    if( dest == overmap::invalid_tripoint ) {
-        return {};
-    }
-    if( !overmap_buffer.seen( dest ) ) {
-        return {};
-    }
-    auto params = overmap_path_params();
-    const auto can_fly = veh.is_aircraft() && veh.is_flying_in_air();
-    const auto can_float = veh.can_float();
-    const auto can_drive = veh.valid_wheel_config();
-    if( can_fly ) {
-        params = overmap_path_params::for_aircraft();
-    } else if( can_float && !can_drive ) {
-        params = overmap_path_params::for_watercraft();
-    } else if( can_drive ) {
-        const auto offroad_coeff = veh.k_traction( veh.wheel_area() * veh.average_or_rating() );
-        const auto tiny = veh.get_points().size() <= 3;
-        params = overmap_path_params::for_land_vehicle( offroad_coeff, tiny, can_float );
-    } else {
-        return {};
-    }
-    const auto start = veh.global_omt_location();
-    if( dest == start ) {
-        return {};
-    }
-    return overmap_buffer.get_travel_path( start, dest, params );
-}
-} // namespace
 
 struct itype;
 
@@ -1105,102 +978,4 @@ void talk_function::npc_thankful( npc &p )
 void talk_function::clear_overrides( npc &p )
 {
     p.rules.clear_overrides();
-}
-
-auto talk_function::npc_vehicle_drive_to( npc &p ) -> void
-{
-    auto *veh = get_npc_vehicle_at_controls( p );
-    if( !veh ) {
-        add_msg( _( "%s isn't in the driver's seat." ), p.disp_name() );
-        return;
-    }
-    if( !veh->engine_on ) {
-        add_msg( _( "The %s's engine is off." ), veh->name );
-        return;
-    }
-    const auto dest = ui::omap::choose_point( veh->global_omt_location() );
-    if( dest == overmap::invalid_tripoint ) {
-        return;
-    }
-    auto path = get_vehicle_overmap_path( *veh, dest );
-    if( path.empty() ) {
-        add_msg( _( "No valid route found." ) );
-        return;
-    }
-    p.omt_path = std::move( path );
-    p.controlling_vehicle = true;
-    p.assign_activity( std::make_unique<player_activity>( std::make_unique<autodrive_activity_actor>() ) );
-}
-
-auto talk_function::npc_vehicle_set_speed( npc &p ) -> void
-{
-    auto *veh = get_npc_vehicle_at_controls( p );
-    if( !veh ) {
-        add_msg( _( "%s isn't in the driver's seat." ), p.disp_name() );
-        return;
-    }
-    const auto current_limit = parse_npc_speed_limit( p ).value_or( veh->cruise_velocity );
-    auto target_speed = display_speed_from_internal( current_limit, VU_VEHICLE );
-    if( !query_int( target_speed,
-                    _( "Set driving speed (%s).  Current: %d" ),
-                    velocity_units( VU_VEHICLE ),
-                    display_speed_from_internal( current_limit, VU_VEHICLE ) ) ) {
-        return;
-    }
-    apply_npc_speed_limit( p, *veh, target_speed );
-}
-
-auto talk_function::npc_vehicle_stop( npc &p ) -> void
-{
-    auto *veh = get_npc_vehicle_at_controls( p );
-    if( !veh ) {
-        add_msg( _( "%s isn't in the driver's seat." ), p.disp_name() );
-        return;
-    }
-    veh->stop_autodriving();
-    veh->stop();
-}
-
-auto talk_function::npc_vehicle_shutdown( npc &p ) -> void
-{
-    auto *veh = get_npc_vehicle_at_controls( p );
-    if( !veh ) {
-        add_msg( _( "%s isn't in the driver's seat." ), p.disp_name() );
-        return;
-    }
-    veh->stop_autodriving();
-    veh->stop_engines();
-}
-
-auto talk_function::npc_vehicle_speed_up( npc &p ) -> void
-{
-    auto *veh = get_npc_vehicle_at_controls( p );
-    if( !veh ) {
-        add_msg( _( "%s isn't in the driver's seat." ), p.disp_name() );
-        return;
-    }
-    adjust_npc_speed_limit( p, *veh, 5 );
-}
-
-auto talk_function::npc_vehicle_speed_down( npc &p ) -> void
-{
-    auto *veh = get_npc_vehicle_at_controls( p );
-    if( !veh ) {
-        add_msg( _( "%s isn't in the driver's seat." ), p.disp_name() );
-        return;
-    }
-    adjust_npc_speed_limit( p, *veh, -5 );
-}
-
-auto talk_function::npc_vehicle_leave_controls( npc &p ) -> void
-{
-    auto *veh = get_npc_vehicle_at_controls( p );
-    if( !veh ) {
-        add_msg( _( "%s isn't in the driver's seat." ), p.disp_name() );
-        return;
-    }
-    veh->stop_autodriving();
-    veh->stop();
-    p.controlling_vehicle = false;
-    get_map().unboard_vehicle( p.pos() );
 }
