@@ -4473,6 +4473,12 @@ void uistatedata::serialize( JsonOut &json ) const
     json.member( "overmap_show_hordes", overmap_show_hordes );
     json.member( "overmap_show_forest_trails", overmap_show_forest_trails );
     json.member( "overmap_highlighted_omts", overmap_highlighted_omts );
+    if( tileset_zoom ) {
+        json.member( "tileset_zoom", *tileset_zoom );
+    }
+    if( overmap_tileset_zoom ) {
+        json.member( "overmap_tileset_zoom", *overmap_tileset_zoom );
+    }
     json.member( "vmenu_show_items", vmenu_show_items );
     json.member( "list_item_sort", list_item_sort );
     json.member( "read_items", read_items );
@@ -4531,6 +4537,16 @@ void uistatedata::deserialize( const JsonObject &jo )
     jo.read( "overmap_show_hordes", overmap_show_hordes );
     jo.read( "overmap_show_forest_trails", overmap_show_forest_trails );
     jo.read( "overmap_highlighted_omts", overmap_highlighted_omts );
+    if( jo.has_float( "tileset_zoom" ) ) {
+        tileset_zoom = jo.get_float( "tileset_zoom" );
+    } else {
+        tileset_zoom.reset();
+    }
+    if( jo.has_int( "overmap_tileset_zoom" ) ) {
+        overmap_tileset_zoom = jo.get_int( "overmap_tileset_zoom" );
+    } else {
+        overmap_tileset_zoom.reset();
+    }
     jo.read( "hidden_recipes", hidden_recipes );
     jo.read( "favorite_recipes", favorite_recipes );
     jo.read( "read_recipes", read_recipes );

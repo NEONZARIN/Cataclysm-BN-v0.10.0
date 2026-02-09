@@ -297,6 +297,113 @@ std::unique_ptr<game> g;
 //The one and only uistate instance
 uistatedata uistate;
 
+namespace {
+#if defined(TILES)
+constexpr auto maximum_zoom_level = 4;
+constexpr auto minimum_zoom_level = 64;
+
+enum class zoom_persistence_scope {
+    global,
+    world,
+    uistate,
+    session
+};
+
+auto clamp_tileset_zoom( float zoom_level ) -> float
+{
+    return std::clamp( zoom_level, static_cast<float>( maximum_zoom_level ),
+                       static_cast<float>( minimum_zoom_level ) );
+}
+
+auto clamp_overmap_tileset_zoom( int zoom_level ) -> int
+{
+    return std::clamp( zoom_level, maximum_zoom_level, minimum_zoom_level );
+}
+
+auto get_zoom_persistence_scope() -> zoom_persistence_scope
+{
+    const auto scope = get_option<std::string>( "ZOOM_PERSISTENCE_SCOPE" );
+    if( scope == "world" ) {
+        return zoom_persistence_scope::world;
+    }
+    if( scope == "uistate" ) {
+        return zoom_persistence_scope::uistate;
+    }
+    if( scope == "session" ) {
+        return zoom_persistence_scope::session;
+    }
+    return zoom_persistence_scope::global;
+}
+
+auto get_tileset_zoom_default() -> float
+{
+    const auto scope = get_zoom_persistence_scope();
+    if( scope == zoom_persistence_scope::world ) {
+        return get_option<float>( "WORLD_TILESET_ZOOM" );
+    }
+    if( scope == zoom_persistence_scope::uistate ) {
+        return uistate.tileset_zoom.value_or( get_option<float>( "TILESET_ZOOM" ) );
+    }
+    if( scope == zoom_persistence_scope::session ) {
+        return static_cast<float>( DEFAULT_TILESET_ZOOM );
+    }
+    return get_option<float>( "TILESET_ZOOM" );
+}
+
+auto get_overmap_tileset_zoom_default() -> int
+{
+    const auto scope = get_zoom_persistence_scope();
+    if( scope == zoom_persistence_scope::world ) {
+        return get_option<int>( "WORLD_OVERMAP_TILESET_ZOOM" );
+    }
+    if( scope == zoom_persistence_scope::uistate ) {
+        return uistate.overmap_tileset_zoom.value_or( get_option<int>( "OVERMAP_TILESET_ZOOM" ) );
+    }
+    if( scope == zoom_persistence_scope::session ) {
+        return DEFAULT_TILESET_ZOOM;
+    }
+    return get_option<int>( "OVERMAP_TILESET_ZOOM" );
+}
+
+auto store_tileset_zoom_default( float zoom_level ) -> void
+{
+    const auto scope = get_zoom_persistence_scope();
+    const auto clamped = clamp_tileset_zoom( zoom_level );
+    if( scope == zoom_persistence_scope::world ) {
+        get_options().get_option( "WORLD_TILESET_ZOOM" ).setValue( clamped );
+        return;
+    }
+    if( scope == zoom_persistence_scope::uistate ) {
+        uistate.tileset_zoom = clamped;
+        return;
+    }
+    if( scope == zoom_persistence_scope::session ) {
+        return;
+    }
+    get_options().get_option( "TILESET_ZOOM" ).setValue( clamped );
+}
+
+auto store_overmap_tileset_zoom_default( int zoom_level ) -> void
+{
+    const auto scope = get_zoom_persistence_scope();
+    const auto clamped = clamp_overmap_tileset_zoom( zoom_level );
+    if( scope == zoom_persistence_scope::world ) {
+        get_options().get_option( "WORLD_OVERMAP_TILESET_ZOOM" ).setValue( clamped );
+        return;
+    }
+    if( scope == zoom_persistence_scope::uistate ) {
+        uistate.overmap_tileset_zoom = clamped;
+        return;
+    }
+    if( scope == zoom_persistence_scope::session ) {
+        return;
+    }
+    get_options().get_option( "OVERMAP_TILESET_ZOOM" ).setValue( clamped );
+}
+
+#endif
+} // namespace
+
 bool is_valid_in_w_terrain( point p )
 {
     return p.x >= 0 && p.x < TERRAIN_WINDOW_WIDTH && p.y >= 0 && p.y < TERRAIN_WINDOW_HEIGHT;
@@ -368,6 +475,15 @@ void game::load_static_data()
     get_auto_pickup().load_global();
     get_safemode().load_global();
     get_distraction_manager().load();
+
+#if defined(TILES)
+    tileset_zoom = clamp_tileset_zoom( get_tileset_zoom_default() );
+    rescale_tileset( tileset_zoom );
+    overmap_tileset_zoom = clamp_overmap_tileset_zoom( get_overmap_tileset_zoom_default() );
+    if( overmap_tilecontext ) {
+        overmap_tilecontext->set_draw_scale( overmap_tileset_zoom );
+    }
+#endif // TILES
 }
 
 #if !(defined(_WIN32) || defined(TILES))
@@ -478,6 +594,9 @@ void game::reload_tileset( [[maybe_unused]] const std::function<void( std::strin
         } catch( const std::exception &err ) {
             popup( _( "Loading the overmap tileset failed: %s" ), err.what() );
         }
+    }
+    if( overmap_tilecontext && overmap_tilecontext != tilecontext ) {
+        overmap_tilecontext->set_draw_scale( overmap_tileset_zoom );
     }
     // Reload resets the tile context scale to its default; reapply the previous zoom explicitly
     // even when the numeric zoom value did not change.
@@ -656,6 +775,15 @@ bool game::start_game()
     mostseen = 0; // ...and mostseen is 0, we haven't seen any monsters yet.
     get_safemode().load_global();
     get_distraction_manager().load();
+
+#if defined(TILES)
+    tileset_zoom = clamp_tileset_zoom( get_tileset_zoom_default() );
+    rescale_tileset( tileset_zoom );
+    overmap_tileset_zoom = clamp_overmap_tileset_zoom( get_overmap_tileset_zoom_default() );
+    if( overmap_tilecontext ) {
+        overmap_tilecontext->set_draw_scale( overmap_tileset_zoom );
+    }
+#endif // TILES
 
     init_autosave();
 
@@ -2783,6 +2911,14 @@ bool game::load( const save_t &name )
         JsonIn jsin( stream );
         uistate.deserialize( jsin );
     }, true );
+#if defined(TILES)
+    tileset_zoom = clamp_tileset_zoom( get_tileset_zoom_default() );
+    rescale_tileset( tileset_zoom );
+    overmap_tileset_zoom = clamp_overmap_tileset_zoom( get_overmap_tileset_zoom_default() );
+    if( overmap_tilecontext ) {
+        overmap_tilecontext->set_draw_scale( overmap_tileset_zoom );
+    }
+#endif // TILES
     reload_npcs();
     validate_npc_followers();
     validate_mounted_npcs();
@@ -7531,10 +7667,7 @@ static void centerlistview( const tripoint &active_item_position, int ui_width )
 }
 
 #if defined(TILES)
-static constexpr int MAXIMUM_ZOOM_LEVEL = 4;
-static constexpr int MINIMUM_ZOOM_LEVEL = 64;
-
-static float calc_next_zoom( float cur_zoom, int direction )
+static auto calc_next_zoom( float cur_zoom, int direction ) -> float
 {
     const int step_count = get_option<int>( "ZOOM_STEP_COUNT" );
     const double nth_root_2 = std::pow( 2, 1. / step_count );
@@ -7549,10 +7682,10 @@ static float calc_next_zoom( float cur_zoom, int direction )
 
     // calculate next zoom value, and wrap if needed
     double next_zoom = std::pow( nth_root_2, zoom_level );
-    if( next_zoom < MAXIMUM_ZOOM_LEVEL - 0.0001f ) {
-        next_zoom = MINIMUM_ZOOM_LEVEL;
-    } else if( next_zoom > MINIMUM_ZOOM_LEVEL + 0.0001f ) {
-        next_zoom = MAXIMUM_ZOOM_LEVEL;
+    if( next_zoom < maximum_zoom_level - 0.0001f ) {
+        next_zoom = minimum_zoom_level;
+    } else if( next_zoom > minimum_zoom_level + 0.0001f ) {
+        next_zoom = maximum_zoom_level;
     }
 
     return next_zoom;
@@ -7564,18 +7697,20 @@ void game::zoom_out()
 #if defined(TILES)
     tileset_zoom = calc_next_zoom( tileset_zoom, -1 );
     rescale_tileset( tileset_zoom );
+    store_tileset_zoom_default( tileset_zoom );
 #endif
 }
 
 void game::zoom_out_overmap()
 {
 #if defined(TILES)
-    if( overmap_tileset_zoom > MAXIMUM_ZOOM_LEVEL ) {
+    if( overmap_tileset_zoom > maximum_zoom_level ) {
         overmap_tileset_zoom /= 2;
     } else {
-        overmap_tileset_zoom = 64;
+        overmap_tileset_zoom = minimum_zoom_level;
     }
     overmap_tilecontext->set_draw_scale( overmap_tileset_zoom );
+    store_overmap_tileset_zoom_default( overmap_tileset_zoom );
 #endif
 }
 
@@ -7584,25 +7719,27 @@ void game::zoom_in()
 #if defined(TILES)
     tileset_zoom = calc_next_zoom( tileset_zoom, 1 );
     rescale_tileset( tileset_zoom );
+    store_tileset_zoom_default( tileset_zoom );
 #endif
 }
 
 void game::zoom_in_overmap()
 {
 #if defined(TILES)
-    if( overmap_tileset_zoom == 64 ) {
-        overmap_tileset_zoom = MAXIMUM_ZOOM_LEVEL;
+    if( overmap_tileset_zoom == minimum_zoom_level ) {
+        overmap_tileset_zoom = maximum_zoom_level;
     } else {
         overmap_tileset_zoom *= 2;
     }
     overmap_tilecontext->set_draw_scale( overmap_tileset_zoom );
+    store_overmap_tileset_zoom_default( overmap_tileset_zoom );
 #endif
 }
 
 void game::reset_zoom()
 {
 #if defined(TILES)
-    tileset_zoom = DEFAULT_TILESET_ZOOM;
+    tileset_zoom = clamp_tileset_zoom( get_tileset_zoom_default() );
     rescale_tileset( tileset_zoom );
 #endif // TILES
 }
