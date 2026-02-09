@@ -103,11 +103,6 @@
       },
       { "text": "Let's talk about your current activity.", "topic": "TALK_ACTIVITIES" },
       {
-        "text": "Let's talk about driving.",
-        "topic": "TALK_VEHICLE_COMMANDS",
-        "condition": { "and": [ "npc_vehicle_controls", { "not": "is_by_radio" } ] }
-      },
-      {
         "text": "Find a horse and mount up!",
         "condition": { "not": "npc_is_riding" },
         "topic": "TALK_DONE",
@@ -882,19 +877,6 @@
         "condition": { "not": "npc_has_activity" },
         "effect": "do_farming"
       }
-    ]
-  },
-  {
-    "id": "TALK_VEHICLE_COMMANDS",
-    "type": "talk_topic",
-    "dynamic_line": "What should I do with the vehicle?",
-    "responses": [
-      { "text": "Drive to a destination.", "topic": "TALK_DONE", "effect": "npc_vehicle_drive_to" },
-      { "text": "Set your driving speed.", "topic": "TALK_VEHICLE_COMMANDS", "effect": "npc_vehicle_set_speed" },
-      { "text": "Stop the vehicle.", "topic": "TALK_VEHICLE_COMMANDS", "effect": "npc_vehicle_stop" },
-      { "text": "Shut off the engine.", "topic": "TALK_VEHICLE_COMMANDS", "effect": "npc_vehicle_shutdown" },
-      { "text": "Leave the driver's seat.", "topic": "TALK_VEHICLE_COMMANDS", "effect": "npc_vehicle_leave_controls" },
-      { "text": "Never mind.", "topic": "TALK_NONE" }
     ]
   },
   {

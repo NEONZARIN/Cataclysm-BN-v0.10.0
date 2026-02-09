@@ -9,7 +9,6 @@
 #include <map>
 #include <memory>
 #include <ostream>
-#include <ranges>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -226,12 +225,7 @@ enum npc_chat_menu {
     NPC_CHAT_ANIMAL_VEHICLE_FOLLOW,
     NPC_CHAT_ANIMAL_VEHICLE_STOP_FOLLOW,
     NPC_CHAT_COMMAND_MAGIC_VEHICLE_FOLLOW,
-    NPC_CHAT_COMMAND_MAGIC_VEHICLE_STOP_FOLLOW,
-    NPC_CHAT_VEHICLE_STOP,
-    NPC_CHAT_VEHICLE_SHUTDOWN,
-    NPC_CHAT_VEHICLE_SPEED_UP,
-    NPC_CHAT_VEHICLE_SPEED_DOWN,
-    NPC_CHAT_VEHICLE_LEAVE_CONTROLS
+    NPC_CHAT_COMMAND_MAGIC_VEHICLE_STOP_FOLLOW
 };
 
 // given a vector of NPCs, presents a menu to allow a player to pick one.
@@ -269,22 +263,6 @@ static void npc_batch_override_toggle(
     }
 }
 
-namespace
-{
-auto npc_has_vehicle_controls( const npc &guy ) -> bool
-{
-    if( !guy.in_vehicle ) {
-        return false;
-    }
-    const auto vp = get_map().veh_at( guy.pos() );
-    if( !vp ) {
-        return false;
-    }
-    auto &veh = vp->vehicle();
-    return veh.part_with_feature( vp->part_index(), VPFLAG_CONTROLS, false ) >= 0;
-}
-} // namespace
-
 static void npc_temp_orders_menu( const std::vector<npc *> &npc_list )
 {
     if( npc_list.empty() ) {
@@ -319,9 +297,6 @@ static void npc_temp_orders_menu( const std::vector<npc *> &npc_list )
         nmenu.desc_enabled = true;
         parse_tags( output_string, get_avatar(), *guy );
         nmenu.footer_text = output_string;
-        const auto has_vehicle_driver = std::ranges::any_of( npc_list, []( const npc *npc_guy ) {
-            return npc_guy && npc_has_vehicle_controls( *npc_guy );
-        } );
         nmenu.addentry( NPC_CHAT_DONE, true, 'd', _( "Done issuing orders" ) );
         nmenu.addentry( NPC_CHAT_FORBID_ENGAGE, true, 'f',
                         guy->rules.has_override_enable( ally_rule::forbid_engage ) ?
@@ -342,13 +317,6 @@ static void npc_temp_orders_menu( const std::vector<npc *> &npc_list )
                         guy->rules.has_override_enable( ally_rule::allow_sleep ) ?
                         _( "Go back to your usual sleeping habits" ) : _( "Take a nap if you need it" ) );
         nmenu.addentry( NPC_CHAT_CLEAR_OVERRIDES, true, 'o', _( "Let's go back to your usual behaviors" ) );
-        if( has_vehicle_driver ) {
-            nmenu.addentry( NPC_CHAT_VEHICLE_STOP, true, 'v', _( "Stop the vehicle" ) );
-            nmenu.addentry( NPC_CHAT_VEHICLE_SHUTDOWN, true, 'e', _( "Shut off the engine" ) );
-            nmenu.addentry( NPC_CHAT_VEHICLE_SPEED_UP, true, '+', _( "Increase driving speed" ) );
-            nmenu.addentry( NPC_CHAT_VEHICLE_SPEED_DOWN, true, '-', _( "Decrease driving speed" ) );
-            nmenu.addentry( NPC_CHAT_VEHICLE_LEAVE_CONTROLS, true, 'l', _( "Leave the driver's seat" ) );
-        }
         nmenu.query();
 
         switch( nmenu.ret ) {
@@ -371,44 +339,9 @@ static void npc_temp_orders_menu( const std::vector<npc *> &npc_list )
                 npc_batch_override_toggle( npc_list, ally_rule::allow_sleep, true );
                 break;
             case NPC_CHAT_CLEAR_OVERRIDES:
-                std::ranges::for_each( npc_list, []( npc *npc_guy ) {
-                    npc_guy->rules.clear_overrides();
-                } );
-                break;
-            case NPC_CHAT_VEHICLE_STOP:
-                std::ranges::for_each( npc_list, []( npc *npc_guy ) {
-                    if( npc_guy && npc_has_vehicle_controls( *npc_guy ) ) {
-                        talk_function::npc_vehicle_stop( *npc_guy );
-                    }
-                } );
-                break;
-            case NPC_CHAT_VEHICLE_SHUTDOWN:
-                std::ranges::for_each( npc_list, []( npc *npc_guy ) {
-                    if( npc_guy && npc_has_vehicle_controls( *npc_guy ) ) {
-                        talk_function::npc_vehicle_shutdown( *npc_guy );
-                    }
-                } );
-                break;
-            case NPC_CHAT_VEHICLE_SPEED_UP:
-                std::ranges::for_each( npc_list, []( npc *npc_guy ) {
-                    if( npc_guy && npc_has_vehicle_controls( *npc_guy ) ) {
-                        talk_function::npc_vehicle_speed_up( *npc_guy );
-                    }
-                } );
-                break;
-            case NPC_CHAT_VEHICLE_SPEED_DOWN:
-                std::ranges::for_each( npc_list, []( npc *npc_guy ) {
-                    if( npc_guy && npc_has_vehicle_controls( *npc_guy ) ) {
-                        talk_function::npc_vehicle_speed_down( *npc_guy );
-                    }
-                } );
-                break;
-            case NPC_CHAT_VEHICLE_LEAVE_CONTROLS:
-                std::ranges::for_each( npc_list, []( npc *npc_guy ) {
-                    if( npc_guy && npc_has_vehicle_controls( *npc_guy ) ) {
-                        talk_function::npc_vehicle_leave_controls( *npc_guy );
-                    }
-                } );
+                for( npc *p : npc_list ) {
+                    p->rules.clear_overrides();
+                }
                 break;
             default:
                 done = true;
@@ -3169,13 +3102,6 @@ void talk_effect_t::parse_string_effect( const std::string &effect_id, const Jso
             WRAP( npc_die ),
             WRAP( npc_thankful ),
             WRAP( clear_overrides ),
-            WRAP( npc_vehicle_drive_to ),
-            WRAP( npc_vehicle_set_speed ),
-            WRAP( npc_vehicle_stop ),
-            WRAP( npc_vehicle_shutdown ),
-            WRAP( npc_vehicle_speed_up ),
-            WRAP( npc_vehicle_speed_down ),
-            WRAP( npc_vehicle_leave_controls ),
             WRAP( nothing )
 #undef WRAP
         }
