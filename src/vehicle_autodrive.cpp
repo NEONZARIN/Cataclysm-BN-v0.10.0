@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -12,6 +13,7 @@
 #include <optional>
 #include <queue>
 #include <string>
+#include <system_error>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -35,6 +37,25 @@
 #include "type_id.h"
 #include "veh_type.h"
 #include "vpart_position.h"
+
+namespace
+{
+constexpr const char *npc_autodrive_speed_key = "npc_autodrive_speed_limit";
+
+auto get_autodrive_speed_limit( const Character &driver ) -> std::optional<int>
+{
+    const auto value = driver.get_value( npc_autodrive_speed_key );
+    if( value.empty() ) {
+        return std::nullopt;
+    }
+    auto limit = 0;
+    const auto result = std::from_chars( value.data(), value.data() + value.size(), limit );
+    if( result.ec != std::errc() ) {
+        return std::nullopt;
+    }
+    return limit;
+}
+} // namespace
 
 /*
  * This file contains code that allows a vehicle to be driven by an in-game character (most
@@ -1244,6 +1265,10 @@ autodrive_result vehicle::do_autodrive( Character &driver )
     }
     cruise_on = true;
     cruise_velocity = next_step->target_speed_tps * VMIPH_PER_TPS;
+    const auto speed_limit = get_autodrive_speed_limit( driver );
+    if( speed_limit && *speed_limit > 0 ) {
+        cruise_velocity = std::min( cruise_velocity, *speed_limit );
+    }
 
     // check for collisions before we steer, since steering may end our turn
     // which would cause the vehicle to move and maybe crash

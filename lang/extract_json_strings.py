@@ -575,7 +575,7 @@ dynamic_line_string_keys = [
     "npc_train_skills", "npc_train_styles",
     "at_safe_space", "is_day", "npc_has_activity", "is_outside", "u_has_camp",
     "u_can_stow_weapon", "npc_can_stow_weapon", "u_has_weapon", "npc_has_weapon",
-    "u_driving", "npc_driving",
+    "u_driving", "npc_driving", "npc_vehicle_controls",
     "has_pickup_list", "is_by_radio", "has_reason",
 # yes/no strings for complex conditions, 'and' list
     "yes", "no", "and"

@@ -21,7 +21,7 @@ const std::unordered_set<std::string> simple_string_conds = { {
         "npc_train_skills", "npc_train_styles",
         "at_safe_space", "is_day", "npc_has_activity", "is_outside",
         "u_can_stow_weapon", "npc_can_stow_weapon", "u_has_weapon", "npc_has_weapon",
-        "u_driving", "npc_driving",
+        "u_driving", "npc_driving", "npc_vehicle_controls",
         "has_pickup_list", "is_by_radio", "has_reason"
     }
 };
@@ -120,6 +120,7 @@ struct conditional_t {
         void set_can_stow_weapon( bool is_npc = false );
         void set_has_weapon( bool is_npc = false );
         void set_is_driving( bool is_npc = false );
+        auto set_vehicle_controls( bool is_npc = false ) -> void;
         void set_is_day();
         void set_has_stolen_item( bool is_npc = false );
         void set_is_outside();
@@ -148,5 +149,4 @@ extern template void read_condition<mission_goal_condition_context>( const JsonO
         const std::string &member_name,
         std::function<bool( const mission_goal_condition_context & )> &condition, bool default_val );
 #endif
-
 
